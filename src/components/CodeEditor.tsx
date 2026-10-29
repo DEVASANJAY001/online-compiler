@@ -51,6 +51,8 @@ function getMonacoLanguage(filePath: string, defaultLang: Language): string {
   }
 }
 
+const QUICK_SYMBOLS = ['Tab', '{', '}', '(', ')', '[', ']', ';', '"', "'", '=', '<', '>', '+', '-', ':', '_']
+
 export const CodeEditor: React.FC<CodeEditorProps> = ({
   files = [],
   activeFilePath,
@@ -98,7 +100,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   }
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 640)
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
     checkMobile()
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
@@ -122,8 +124,27 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         })
       }
     })
+  }
 
-    editor.focus()
+  // Insert symbol at current cursor position (for mobile quick symbol bar)
+  const handleInsertSymbol = (symbol: string) => {
+    const textToInsert = symbol === 'Tab' ? ' '.repeat(settings.tabSize || 2) : symbol
+    if (editorRef.current) {
+      const editor = editorRef.current
+      const selection = editor.getSelection()
+      if (selection) {
+        editor.executeEdits('quick-symbol', [
+          {
+            range: selection,
+            text: textToInsert,
+            forceMoveMarkers: true,
+          },
+        ])
+        editor.focus()
+      }
+    } else {
+      onChange(content + textToInsert)
+    }
   }
 
   const handleCopy = () => {
@@ -167,13 +188,13 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       className={`${
         layoutMode === 'friendly'
           ? 'w-full h-full flex flex-col bg-white dark:bg-slate-900 overflow-hidden'
-          : 'w-full md:w-1/2 h-1/2 md:h-full flex flex-col border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden'
+          : 'w-full md:w-1/2 h-full flex flex-col border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden'
       } ${isFullscreen ? 'fixed inset-0 z-50 w-screen h-screen' : ''}`}
       data-purpose="code-editor-pane"
     >
-      {/* Editor Tabs Header (Stitch design) */}
-      <div className="h-9 bg-slate-100/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700/80 flex items-center justify-between px-2 shrink-0 select-none">
-        <div className="flex items-center h-full overflow-x-auto">
+      {/* Editor Tabs Header */}
+      <div className="h-9 bg-slate-100/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700/80 flex items-center justify-between px-2 shrink-0 select-none overflow-hidden">
+        <div className="flex items-center h-full overflow-x-auto touch-pan-x scrollbar-none flex-1 min-w-0 mr-2">
           {displayFiles.map((file) => {
             const isActive = file.path === activeFilePath
             const isEditing = editingFilePath === file.path
@@ -182,7 +203,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
               <div
                 key={file.path}
                 onClick={() => onSelectFile && onSelectFile(file.path)}
-                className={`group flex items-center gap-1.5 px-3 h-full text-xs font-medium cursor-pointer transition border-r border-slate-200 dark:border-slate-700/80 ${
+                className={`group flex items-center gap-1.5 px-2.5 sm:px-3 h-full text-xs font-medium cursor-pointer transition border-r border-slate-200 dark:border-slate-700/80 shrink-0 ${
                   isActive
                     ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border-t-2 border-t-indigo-600 font-semibold shadow-xs'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800'
@@ -206,7 +227,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
                       if (e.key === 'Escape') setEditingFilePath(null)
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    className="bg-white dark:bg-slate-800 border border-indigo-500 text-slate-800 dark:text-slate-100 rounded px-1.5 py-0.5 text-xs font-medium outline-hidden w-28"
+                    className="bg-white dark:bg-slate-800 border border-indigo-500 text-slate-800 dark:text-slate-100 rounded px-1.5 py-0.5 text-xs font-medium outline-hidden w-24 sm:w-28"
                     autoFocus
                   />
                 ) : (
@@ -216,7 +237,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
                       handleStartRename(file.path, file.name || file.path)
                     }}
                     title="Double-click to rename file"
-                    className="truncate max-w-[140px]"
+                    className="truncate max-w-[100px] sm:max-w-[140px]"
                   >
                     {file.name || file.path}
                   </span>
@@ -255,12 +276,12 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             )
           })}
 
-          {/* Add New Tab Button (Supports multiple files) */}
+          {/* Add New Tab Button */}
           {onAddFile && (
             <button
               onClick={onAddFile}
-              className="px-2.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/50 h-full flex items-center transition cursor-pointer text-sm font-semibold"
-              title="Add file(s) - comma separate for multiple"
+              className="px-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/50 h-full flex items-center transition cursor-pointer text-sm font-semibold shrink-0"
+              title="Add file(s)"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -320,67 +341,62 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         </div>
       </div>
 
-      {/* Editor Content Area */}
+      {/* Mobile Quick Symbols Toolbar (Assists typing syntax on phone keyboards) */}
+      {isMobile && (
+        <div className="h-7 bg-slate-100/90 dark:bg-slate-800/80 border-b border-slate-200/80 dark:border-slate-700/60 flex items-center px-1 overflow-x-auto touch-pan-x scrollbar-none gap-1 shrink-0 select-none">
+          {QUICK_SYMBOLS.map((sym) => (
+            <button
+              key={sym}
+              type="button"
+              onClick={() => handleInsertSymbol(sym)}
+              className="h-5 min-w-[24px] px-1 rounded bg-white dark:bg-slate-700/90 text-slate-700 dark:text-slate-200 font-mono text-[11px] font-semibold border border-slate-200 dark:border-slate-600 active:bg-indigo-100 dark:active:bg-indigo-900 transition flex items-center justify-center shrink-0 shadow-2xs"
+            >
+              {sym}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Editor Content Area: Rich Monaco Editor with Mobile Optimizations */}
       <div className="flex-1 relative overflow-hidden bg-white dark:bg-slate-900">
-        {isMobile ? (
-          <div className="h-full flex flex-col">
-            <textarea
-              value={content}
-              onChange={(e) => onChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Tab') {
-                  e.preventDefault()
-                  const target = e.currentTarget
-                  const start = target.selectionStart
-                  const end = target.selectionEnd
-                  const spaces = ' '.repeat(settings.tabSize || 2)
-                  const nextVal = content.substring(0, start) + spaces + content.substring(end)
-                  onChange(nextVal)
-                  setTimeout(() => {
-                    target.selectionStart = target.selectionEnd = start + spaces.length
-                  }, 0)
-                }
-              }}
-              spellCheck={false}
-              autoCapitalize="none"
-              autoCorrect="off"
-              aria-label="Code Editor"
-              className="flex-1 w-full bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-3 font-mono text-xs leading-relaxed resize-none focus:outline-hidden"
-              style={{ fontSize: `${settings.fontSize}px` }}
-            />
-          </div>
-        ) : (
-          <Editor
-            height="100%"
-            path={activeFilePath}
-            language={monacoLanguage}
-            value={content}
-            theme={theme === 'dark' ? 'vs-dark' : 'vs'}
-            onChange={(val) => onChange(val || '')}
-            onMount={handleEditorMount}
-            loading={
-              <div className="h-full flex items-center justify-center text-slate-400 font-mono text-xs">
-                Loading Code Editor...
-              </div>
-            }
-            options={{
-              fontSize: settings.fontSize,
-              tabSize: settings.tabSize,
-              wordWrap: settings.wordWrap,
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              fontFamily: "'Fira Code', 'JetBrains Mono', Consolas, monospace",
-              fontLigatures: true,
-              lineNumbers: 'on',
-              renderLineHighlight: 'all',
-              cursorBlinking: 'smooth',
-              cursorSmoothCaretAnimation: 'on',
-              bracketPairColorization: { enabled: true },
-              padding: { top: 10, bottom: 10 },
-            }}
-          />
-        )}
+        <Editor
+          height="100%"
+          path={activeFilePath}
+          language={monacoLanguage}
+          value={content}
+          theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+          onChange={(val) => onChange(val || '')}
+          onMount={handleEditorMount}
+          loading={
+            <div className="h-full flex items-center justify-center text-slate-400 font-mono text-xs">
+              Loading Code Editor...
+            </div>
+          }
+          options={{
+            fontSize: isMobile ? Math.max(settings.fontSize, 13) : settings.fontSize,
+            tabSize: settings.tabSize,
+            wordWrap: 'on',
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
+            fontLigatures: true,
+            lineNumbers: 'on',
+            lineNumbersMinChars: isMobile ? 3 : 4,
+            glyphMargin: false,
+            folding: !isMobile,
+            lineDecorationsWidth: isMobile ? 6 : 10,
+            renderLineHighlight: 'all',
+            cursorBlinking: 'smooth',
+            bracketPairColorization: { enabled: true },
+            padding: { top: 8, bottom: 8 },
+            quickSuggestions: !isMobile,
+            scrollbar: {
+              verticalScrollbarSize: 5,
+              horizontalScrollbarSize: 5,
+            },
+          }}
+        />
       </div>
     </section>
   )

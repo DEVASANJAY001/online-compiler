@@ -3,17 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta
       name="description"
       content="CodeSpace is a client-side serverless online compiler for C, C++, Java, Python, and JavaScript executing via WebAssembly in browser workers."
     />
     <title>CodeSpace — Serverless Online Compiler</title>
+    <!-- Cross-Origin Isolation Service Worker for GitHub Pages / static hosting -->
+    <script src="/coi-serviceworker.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
+      crossorigin="anonymous"
     />
     <script>
       (function() {

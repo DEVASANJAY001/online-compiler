@@ -10,18 +10,20 @@ export default defineConfig({
   ],
   assetsInclude: ['**/*.bin', '**/*.wasm'],
   server: {
+    host: true,
     fs: {
       strict: false,
     },
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'credentialless',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
     },
   },
   preview: {
+    host: true,
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'credentialless',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
     },
   },
 })

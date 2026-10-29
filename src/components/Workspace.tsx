@@ -22,10 +22,17 @@ export const Workspace: React.FC = () => {
   const [dirtyFiles, setDirtyFiles] = useState<Set<string>>(new Set())
   const [activeFilePath, setActiveFilePath] = useState<string>('')
 
-  // Layout mode: 'friendly' (Default bottom terminal) or 'pro' (Side-by-side split)
+  // Responsive mobile screen detection & layout modes
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
+    return typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  })
+  // Mobile views: 'code' (full editor), 'output' (full terminal), 'split' (both)
+  const [mobileView, setMobileView] = useState<'code' | 'output' | 'split'>('code')
+
+  // Desktop Layout mode: 'friendly' (Default bottom terminal) or 'pro' (Side-by-side split)
   const [layoutMode, setLayoutMode] = useState<'friendly' | 'pro'>('friendly')
   const [bottomConsoleHeight, setBottomConsoleHeight] = useState<number>(() => {
-    return typeof window !== 'undefined' && window.innerWidth < 640 ? 210 : 270
+    return typeof window !== 'undefined' && window.innerWidth < 640 ? 220 : 270
   })
   const [isConsoleCollapsed, setIsConsoleCollapsed] = useState<boolean>(false)
   const isResizingRef = useRef(false)
@@ -49,9 +56,19 @@ export const Workspace: React.FC = () => {
   })
   const [settings, setSettings] = useState<Settings>({ ...DEFAULT_SETTINGS, theme: 'light' })
 
-  // Modals & Banner state
+  // Modals state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false)
+
+  // Screen resize listener for mobile screen ratio
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth < 768)
+    }
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // Initial Load from IndexedDB
   useEffect(() => {
@@ -59,7 +76,6 @@ export const Workspace: React.FC = () => {
       try {
         const loadedSettings = await storageService.getSettings()
         const savedLocal = localStorage.getItem('codespace_theme')
-        // Only use dark if explicitly chosen by user in this browser; otherwise default to white (light)
         const activeTheme: 'dark' | 'light' = (savedLocal === 'dark' || savedLocal === 'light')
           ? savedLocal
           : 'light'
@@ -131,7 +147,7 @@ export const Workspace: React.FC = () => {
       })
     }
 
-    // Background precompile debounce (1.2s idle) so clicking Run is instantaneous
+    // Background precompile debounce (1.2s idle)
     if (precompileTimeoutRef.current) {
       clearTimeout(precompileTimeoutRef.current)
     }
@@ -179,9 +195,14 @@ export const Workspace: React.FC = () => {
     runtimeManager.precompile(newLang, targetProj.files, targetProj.activeFile)
   }
 
-  // Interactive Execution Engine with Stdin Continuation & Multi-input interleaving
+  // Interactive Execution Engine with Stdin Continuation
   const executeWithStdin = async (inputData: string, isContinuation = false) => {
     if (!currentProject || !activeFile) return
+
+    // If on mobile screen and looking at 'code' view, auto-switch to 'output' view to see execution
+    if (isMobileScreen && mobileView === 'code') {
+      setMobileView('output')
+    }
 
     if (!isContinuation) {
       await handleSave()
@@ -189,6 +210,34 @@ export const Workspace: React.FC = () => {
       setAccumulatedStdin('')
       setLastResult(null)
       prevStdoutLengthRef.current = 0
+    }
+
+    // Pre-check Cross-Origin Isolation for C, C++, and Java (Wasmer / WebAssembly toolchain)
+    const requiresIsolation =
+      currentProject.language === 'c' ||
+      currentProject.language === 'cpp' ||
+      currentProject.language === 'java'
+
+    if (requiresIsolation && typeof window !== 'undefined' && !window.crossOriginIsolated) {
+      const isSecure = Boolean(window.isSecureContext)
+      let msg = `[CodeSpace Environment Restriction]\n`
+      msg += `WebAssembly ${currentProject.language.toUpperCase()} compilation requires Cross-Origin Isolation (COOP & COEP headers) and a Secure Context.\n\n`
+      if (!isSecure) {
+        msg += `Reason: This page is loaded over plain HTTP (${window.location.origin}).\n`
+        msg += `Browsers (especially Mobile Safari and Mobile Chrome) strictly block SharedArrayBuffer and WebAssembly multi-threading on non-secure origins.\n\n`
+        msg += `Fixes for Mobile:\n`
+        msg += `• Test Python (3.12) or JavaScript — both run 100% offline in this browser without requiring Cross-Origin Isolation!\n`
+        msg += `• For C, C++, or Java on mobile, serve via HTTPS (e.g. use an ngrok or Cloudflare tunnel, or 'vite --https').\n`
+      } else {
+        msg += `Reason: COOP and COEP response headers are not enabled by the hosting server.\n`
+        msg += `Required headers:\n`
+        msg += `  Cross-Origin-Opener-Policy: same-origin\n`
+        msg += `  Cross-Origin-Embedder-Policy: require-corp\n\n`
+        msg += `Note: Python and JavaScript do not require Cross-Origin Isolation and work immediately.\n`
+      }
+      setTerminalOutput(msg)
+      setExecutionState('failed')
+      return
     }
 
     setExecutionState(isContinuation ? 'running' : 'initializing')
@@ -243,7 +292,19 @@ export const Workspace: React.FC = () => {
       }
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err)
-      setTerminalOutput((prev) => prev + `\n[CodeSpace Error] ${errorMsg}\n`)
+      if (errorMsg.includes('cross-origin-isolated') || errorMsg.includes('Wasmer requires')) {
+        let msg = `[CodeSpace Error] Wasmer requires a cross-origin-isolated page (COOP & COEP headers).\n\n`
+        if (typeof window !== 'undefined' && !window.isSecureContext) {
+          msg += `The page is loaded via insecure HTTP (${window.location.origin}). Mobile browsers block SharedArrayBuffer over plain HTTP.\n`
+          msg += `Tip: Switch to Python or JavaScript (both run without isolation restrictions), or serve via HTTPS for C/C++/Java.`
+        } else {
+          msg += `Ensure your server serves:\n  Cross-Origin-Opener-Policy: same-origin\n  Cross-Origin-Embedder-Policy: require-corp\n`
+          msg += `Tip: Python and JavaScript run in all browsers without this requirement.`
+        }
+        setTerminalOutput((prev) => prev + `\n${msg}\n`)
+      } else {
+        setTerminalOutput((prev) => prev + `\n[CodeSpace Error] ${errorMsg}\n`)
+      }
       setExecutionState('failed')
     }
   }
@@ -265,7 +326,7 @@ export const Workspace: React.FC = () => {
     const nextStdin = accumulatedStdin + inputLine + '\n'
     setAccumulatedStdin(nextStdin)
 
-    // Echo user input onto the active terminal line followed by newline
+    // Echo user input onto the terminal line
     setTerminalOutput((prev) => prev + inputLine + '\n')
 
     // Continue execution with all accumulated inputs
@@ -279,7 +340,7 @@ export const Workspace: React.FC = () => {
     setTerminalOutput((prev) => prev + '\n[CodeSpace] Execution terminated by user.\n')
   }
 
-  // Resizing divider between Editor and Bottom Terminal in Friendly Mode
+  // Resizing divider mouse handler
   const handleDividerMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
     isResizingRef.current = true
@@ -302,6 +363,31 @@ export const Workspace: React.FC = () => {
 
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
+  }
+
+  // Resizing divider touch handler for mobile screens
+  const handleDividerTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return
+    isResizingRef.current = true
+    const startY = e.touches[0].clientY
+    const startH = bottomConsoleHeight
+
+    const onTouchMove = (moveEvent: TouchEvent) => {
+      if (!isResizingRef.current || moveEvent.touches.length !== 1) return
+      const deltaY = startY - moveEvent.touches[0].clientY
+      const newHeight = Math.max(120, Math.min(window.innerHeight - 160, startH + deltaY))
+      setBottomConsoleHeight(newHeight)
+      if (isConsoleCollapsed) setIsConsoleCollapsed(false)
+    }
+
+    const onTouchEnd = () => {
+      isResizingRef.current = false
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('touchend', onTouchEnd)
+    }
+
+    window.addEventListener('touchmove', onTouchMove, { passive: true })
+    window.addEventListener('touchend', onTouchEnd, { once: true })
   }
 
   // File and Project operations
@@ -467,7 +553,6 @@ export const Workspace: React.FC = () => {
   // Auto-format code
   const handleFormatCode = () => {
     if (!activeFile) return
-    // Clean indentation & trailing spaces
     const lines = activeFile.content.split('\n')
     const formatted = lines.map((l) => l.trimEnd()).join('\n')
     handleContentChange(formatted)
@@ -505,8 +590,8 @@ export const Workspace: React.FC = () => {
   }
 
   return (
-    <div className={`h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 select-none antialiased overflow-hidden`}>
-      {/* Top Navigation Header (Stitch design) */}
+    <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 select-none antialiased overflow-hidden">
+      {/* Top Navigation Header */}
       <Header
         language={currentProject.language}
         onLanguageChange={handleLanguageChange}
@@ -527,6 +612,7 @@ export const Workspace: React.FC = () => {
           storageService.saveSettings({ ...settings, theme: next })
         }}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onNewProject={() => setIsNewProjectOpen(true)}
         onDownloadFile={handleDownloadFile}
         onDownloadZip={handleDownloadZip}
         onDownloadLog={handleDownloadLog}
@@ -534,14 +620,16 @@ export const Workspace: React.FC = () => {
         onFormatCode={handleFormatCode}
         layoutMode={layoutMode}
         onToggleLayoutMode={(m) => setLayoutMode(m)}
+        mobileView={mobileView}
+        onSetMobileView={(v) => setMobileView(v)}
       />
 
-      {/* Offline status banner */}
+      {/* Dynamic status & cross-origin isolation banner */}
       <StatusBanner />
 
       {/* Main Workspace Body */}
       <main className="flex-1 flex overflow-hidden">
-        {/* Far Left 48px Compact Language Sidebar (Stitch design) */}
+        {/* Far Left 48px Compact Language Sidebar (Desktop/Tablet) */}
         <LanguageStrip
           currentLanguage={currentProject.language}
           onLanguageChange={handleLanguageChange}
@@ -549,10 +637,130 @@ export const Workspace: React.FC = () => {
           disabled={isBusy}
         />
 
-        {layoutMode === 'friendly' ? (
-          /* DEFAULT: Friendly Version (Stitch Screen 4fa6264451e34ea990b9ca3ca82838b0) */
+        {isMobileScreen ? (
+          /* MOBILE VIEW: Optimized Screen Ratio Tabs ('code' | 'output' | 'split') */
           <div className="flex-1 flex flex-col h-full overflow-hidden">
-            {/* Top Pane: Full-Width Code Editor */}
+            {mobileView === 'code' && (
+              <div className="flex-1 w-full h-full flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+                <CodeEditor
+                  files={currentProject.files}
+                  activeFilePath={activeFile.path}
+                  onSelectFile={handleSelectFile}
+                  onAddFile={handleAddFile}
+                  onDeleteFile={handleDeleteFile}
+                  onRenameFile={handleRenameFile}
+                  content={activeFile.content}
+                  language={currentProject.language}
+                  onChange={handleContentChange}
+                  onRun={handleRun}
+                  onFormat={handleFormatCode}
+                  settings={settings}
+                  theme={theme}
+                  onCursorChange={(pos) => setCursorPos(pos)}
+                  onFontSizeChange={(size) => {
+                    setSettings((prev) => ({ ...prev, fontSize: size }))
+                    storageService.saveSettings({ ...settings, fontSize: size })
+                  }}
+                  layoutMode="friendly"
+                />
+              </div>
+            )}
+
+            {mobileView === 'output' && (
+              <div className="flex-1 w-full h-full flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
+                <OutputConsole
+                  executionState={executionState}
+                  result={lastResult}
+                  terminalOutput={terminalOutput}
+                  language={currentProject.language}
+                  onSendInput={handleSendInput}
+                  onClearConsole={() => {
+                    setTerminalOutput('')
+                    setAccumulatedStdin('')
+                    setLastResult(null)
+                    setExecutionState('idle')
+                  }}
+                  onCopyOutput={() => {
+                    navigator.clipboard.writeText(terminalOutput)
+                  }}
+                  onRun={handleRun}
+                  codeContent={activeFile.content}
+                  layoutMode="friendly"
+                  isCollapsed={false}
+                  onBackToCode={() => setMobileView('code')}
+                />
+              </div>
+            )}
+
+            {mobileView === 'split' && (
+              <div className="flex-1 flex flex-col h-full overflow-hidden">
+                <div className="w-full flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden min-h-[120px]">
+                  <CodeEditor
+                    files={currentProject.files}
+                    activeFilePath={activeFile.path}
+                    onSelectFile={handleSelectFile}
+                    onAddFile={handleAddFile}
+                    onDeleteFile={handleDeleteFile}
+                    onRenameFile={handleRenameFile}
+                    content={activeFile.content}
+                    language={currentProject.language}
+                    onChange={handleContentChange}
+                    onRun={handleRun}
+                    onFormat={handleFormatCode}
+                    settings={settings}
+                    theme={theme}
+                    onCursorChange={(pos) => setCursorPos(pos)}
+                    onFontSizeChange={(size) => {
+                      setSettings((prev) => ({ ...prev, fontSize: size }))
+                      storageService.saveSettings({ ...settings, fontSize: size })
+                    }}
+                    layoutMode="friendly"
+                  />
+                </div>
+
+                {/* Resizable Divider with Touch Support */}
+                <div
+                  onMouseDown={handleDividerMouseDown}
+                  onTouchStart={handleDividerTouchStart}
+                  className="h-2.5 bg-slate-100 hover:bg-indigo-100/70 dark:bg-slate-800 dark:hover:bg-indigo-950/70 border-y border-slate-200 dark:border-slate-700 cursor-row-resize flex items-center justify-center shrink-0 transition select-none group touch-none"
+                  title="Drag to resize panes"
+                >
+                  <div className="w-12 h-1 bg-slate-300 dark:bg-slate-600 group-hover:bg-indigo-500 rounded-full transition-colors flex items-center justify-center gap-0.5">
+                    <span className="w-1 h-0.5 bg-slate-400 group-hover:bg-white rounded-full"></span>
+                    <span className="w-1 h-0.5 bg-slate-400 group-hover:bg-white rounded-full"></span>
+                    <span className="w-1 h-0.5 bg-slate-400 group-hover:bg-white rounded-full"></span>
+                  </div>
+                </div>
+
+                <OutputConsole
+                  executionState={executionState}
+                  result={lastResult}
+                  terminalOutput={terminalOutput}
+                  language={currentProject.language}
+                  onSendInput={handleSendInput}
+                  onClearConsole={() => {
+                    setTerminalOutput('')
+                    setAccumulatedStdin('')
+                    setLastResult(null)
+                    setExecutionState('idle')
+                  }}
+                  onCopyOutput={() => {
+                    navigator.clipboard.writeText(terminalOutput)
+                  }}
+                  onRun={handleRun}
+                  codeContent={activeFile.content}
+                  layoutMode="friendly"
+                  height={bottomConsoleHeight}
+                  isCollapsed={isConsoleCollapsed}
+                  onToggleCollapse={() => setIsConsoleCollapsed(!isConsoleCollapsed)}
+                  onBackToCode={() => setMobileView('code')}
+                />
+              </div>
+            )}
+          </div>
+        ) : layoutMode === 'friendly' ? (
+          /* DESKTOP FRIENDLY VIEW: Top Editor, Bottom Terminal */
+          <div className="flex-1 flex flex-col h-full overflow-hidden">
             <div className="w-full flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden min-h-[140px]">
               <CodeEditor
                 files={currentProject.files}
@@ -577,10 +785,10 @@ export const Workspace: React.FC = () => {
               />
             </div>
 
-            {/* Resizable Divider Bar (Stitch design) */}
             <div
               onMouseDown={handleDividerMouseDown}
-              className="h-2 bg-slate-100 hover:bg-indigo-100/70 dark:bg-slate-800 dark:hover:bg-indigo-950/70 border-y border-slate-200 dark:border-slate-700 cursor-row-resize flex items-center justify-center shrink-0 transition select-none group"
+              onTouchStart={handleDividerTouchStart}
+              className="h-2 bg-slate-100 hover:bg-indigo-100/70 dark:bg-slate-800 dark:hover:bg-indigo-950/70 border-y border-slate-200 dark:border-slate-700 cursor-row-resize flex items-center justify-center shrink-0 transition select-none group touch-none"
               title="Drag to resize panes"
             >
               <div className="w-12 h-1 bg-slate-300 dark:bg-slate-600 group-hover:bg-indigo-500 rounded-full transition-colors flex items-center justify-center gap-0.5">
@@ -590,7 +798,6 @@ export const Workspace: React.FC = () => {
               </div>
             </div>
 
-            {/* Bottom Pane: Full-Width Terminal & Console */}
             <OutputConsole
               executionState={executionState}
               result={lastResult}
@@ -615,7 +822,7 @@ export const Workspace: React.FC = () => {
             />
           </div>
         ) : (
-          /* PRO VERSION: Side-by-Side Split View (Stitch Screen b62cc8d4bb2d483b9ad3bad120e38183) */
+          /* DESKTOP PRO VERSION: Side-by-Side Split View */
           <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden">
             <CodeEditor
               files={currentProject.files}
@@ -662,7 +869,7 @@ export const Workspace: React.FC = () => {
         )}
       </main>
 
-      {/* Bottom Status Bar (Stitch design) */}
+      {/* Bottom Status Bar */}
       <FooterBar
         language={currentProject.language}
         executionState={executionState}
