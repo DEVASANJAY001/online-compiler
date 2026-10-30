@@ -1,6 +1,7 @@
 import { BrowserCompiler, BrowserRunner, prefetchBrowserToolchain } from '@wasm-oj/browser'
 import { browserSource as clangSource } from '@wasm-oj/toolchain-clang'
 import { browserSource as javaSource } from '@wasm-oj/toolchain-java'
+import { runTeaVmWebAssembly } from './java/JavaWasiRunner'
 import type { Language, ProjectFile, ExecutionResult, Diagnostic } from '../types'
 import type { RuntimeRunOptions } from './types'
 
@@ -398,13 +399,42 @@ export async function executeWasmOjProject(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let runResult: any
   try {
-    runResult = await runner.run(buildResult.artifact as Parameters<typeof runner.run>[0], {
-      args: [],
-      stdin: formattedStdin,
-      env: wasmProject.config.env,
-      determinism: wasmProject.config.determinism,
-      resources: wasmProject.config.resources,
-    })
+    const rawArtifact = buildResult.artifact as any
+    const javaBytes = rawArtifact?.bytes || rawArtifact?.wasm
+    if (language === 'java' && javaBytes instanceof Uint8Array) {
+      // Execute Java WebAssembly directly in browser runner with full teavmMath and WASI support,
+      // avoiding WASM-OJ Wasmer rejection: "unsupported runtime import namespace 'teavmMath'"
+      const javaRes = await runTeaVmWebAssembly(javaBytes, {
+        stdin: formattedStdin,
+        timeoutMs: wallTimeLimit,
+        onStream: (stream, chunk) => {
+          if (stream === 'stdout') {
+            stdoutAccum += chunk
+          } else {
+            stderrAccum += chunk
+          }
+          onStream?.(stream, chunk)
+        },
+      })
+      runResult = {
+        stdout: javaRes.stdout,
+        stderr: javaRes.stderr,
+        code: javaRes.code,
+        metrics: {
+          memoryBytes: javaRes.memoryBytes,
+          cost: null,
+        },
+        termination: javaRes.termination,
+      }
+    } else {
+      runResult = await runner.run(buildResult.artifact as Parameters<typeof runner.run>[0], {
+        args: [],
+        stdin: formattedStdin,
+        env: wasmProject.config.env,
+        determinism: wasmProject.config.determinism,
+        resources: wasmProject.config.resources,
+      })
+    }
   } finally {
     unsubscribeStream()
   }
