@@ -1,4 +1,6 @@
 // Dedicated Web Worker for Python Execution via Pyodide CPython WebAssembly
+import { cleanPythonTraceback } from '../utils/pythonTraceback'
+
 declare function importScripts(...urls: string[]): void
 
 const PYODIDE_CDNS = [
@@ -62,19 +64,24 @@ if (typeof self !== 'undefined' && typeof self.fetch === 'function' && typeof ca
   }
 }
 
-async function resolveLoadPyodide(): Promise<{ loadPyodide: LoadPyodideFn; cdnUrl: string }> {
-  for (const cdn of PYODIDE_CDNS) {
-    // Strategy 1: Dynamic ES module import (standard for module workers)
-    try {
-      const moduleUrl = `${cdn}pyodide.mjs`
-      const mod = await import(/* @vite-ignore */ moduleUrl)
-      if (typeof mod.loadPyodide === 'function') {
-        return { loadPyodide: mod.loadPyodide, cdnUrl: cdn }
-      }
-    } catch (e) {
-      console.warn(`[CodeSpace Python] ESM import failed from ${cdn}:`, e)
-    }
+async function tryImportPyodide(cdn: string): Promise<{ loadPyodide: LoadPyodideFn; cdnUrl: string }> {
+  const moduleUrl = `${cdn}pyodide.mjs`
+  const mod = await import(/* @vite-ignore */ moduleUrl)
+  if (typeof mod.loadPyodide === 'function') {
+    return { loadPyodide: mod.loadPyodide, cdnUrl: cdn }
+  }
+  throw new Error(`loadPyodide missing from ${cdn}`)
+}
 
+async function resolveLoadPyodide(): Promise<{ loadPyodide: LoadPyodideFn; cdnUrl: string }> {
+  // Strategy 1: Race dynamic ESM import from all CDNs in parallel (fastest CDN wins)
+  try {
+    return await Promise.any(PYODIDE_CDNS.map((cdn) => tryImportPyodide(cdn)))
+  } catch (e) {
+    console.warn('[CodeSpace Python] Parallel ESM import failed, trying sequential fallbacks:', e)
+  }
+
+  for (const cdn of PYODIDE_CDNS) {
     // Strategy 2: If running as classic worker where importScripts is supported
     if (typeof importScripts === 'function') {
       try {
@@ -357,22 +364,30 @@ if ${JSON.stringify(cacheKey)} not in _bytecode_cache:
       const compilationTimeMs = performance.now() - compileStart
 
       // Check if user code requires async evaluation (top-level await)
-      const hasTopLevelAwait = /(?:^|\n)\s*await\s+/.test(data.code) || /(?:^|\n)\s*async\s+for\b/.test(data.code)
+      let hasTopLevelAwait = false
+      try {
+        hasTopLevelAwait = /(?:^|\n)\s*await\s+/.test(data.code) || /(?:^|\n)\s*async\s+for\b/.test(data.code)
+      } catch {
+        hasTopLevelAwait = false
+      }
 
       const executionStart = performance.now()
       if (hasTopLevelAwait) {
-        await pyodide.runPythonAsync(`
-__file__ = ${JSON.stringify(entryFilename)}
-__name__ = "__main__"
-await eval(compile(${JSON.stringify(data.code)}, __file__, "eval")) if False else None
-exec(_bytecode_cache[${JSON.stringify(cacheKey)}], globals())
-`)
+        await pyodide.runPythonAsync(data.code)
       } else {
-        // High-speed synchronous execution path (0ms event loop latency)
+        // High-speed synchronous execution path with clean isolated namespace and exit code tracking
         pyodide.runPython(`
-__file__ = ${JSON.stringify(entryFilename)}
-__name__ = "__main__"
-exec(_bytecode_cache[${JSON.stringify(cacheKey)}], globals())
+_user_ns = {
+    "__name__": "__main__",
+    "__file__": ${JSON.stringify(entryFilename)},
+    "__doc__": None,
+}
+try:
+    exec(_bytecode_cache[${JSON.stringify(cacheKey)}], _user_ns)
+except SystemExit as _e:
+    _code = _e.code if isinstance(_e.code, int) else (0 if _e.code is None else 1)
+    if _code != 0:
+        raise
 `)
       }
       const executionDurationMs = performance.now() - executionStart
@@ -408,8 +423,9 @@ exec(_bytecode_cache[${JSON.stringify(cacheKey)}], globals())
       }
     } catch (err: unknown) {
       const error = err as Error
-      const errorMessage = error?.message || String(err)
-      sendChunk('stderr', errorMessage + '\n')
+      const rawMessage = error?.message || String(err)
+      const cleanedMessage = cleanPythonTraceback(rawMessage) || rawMessage
+      sendChunk('stderr', cleanedMessage + '\n')
 
       const executionDurationMs = performance.now() - startTime
 
@@ -422,7 +438,7 @@ exec(_bytecode_cache[${JSON.stringify(cacheKey)}], globals())
           stderr: stderrBuffer,
           compilationTimeMs: 0,
           executionDurationMs,
-          error: errorMessage,
+          error: cleanedMessage,
         })
       }
     } finally {

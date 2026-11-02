@@ -24,6 +24,48 @@ const inFlightBuildPromises = new Map<
   Promise<{ buildResult: { success: boolean; artifact?: unknown; diagnostics?: unknown[] }; compilationTimeMs: number; diagnostics: Diagnostic[] }>
 >()
 
+// Global serialization queues for single-threaded WASM-OJ workers (BrowserCompiler and BrowserRunner accept only 1 active operation)
+let compilerQueue: Promise<unknown> = Promise.resolve()
+let runnerQueue: Promise<unknown> = Promise.resolve()
+let activeCompilerBuildCount = 0
+let latestPrecompileKey: string | null = null
+
+export function runWithCompilerLock<T>(task: () => Promise<T>): Promise<T> {
+  const previous = compilerQueue
+  let release: () => void
+  const current = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  compilerQueue = current
+
+  return (async () => {
+    try {
+      await previous.catch(() => {})
+      return await task()
+    } finally {
+      release!()
+    }
+  })()
+}
+
+export function runWithRunnerLock<T>(task: () => Promise<T>): Promise<T> {
+  const previous = runnerQueue
+  let release: () => void
+  const current = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  runnerQueue = current
+
+  return (async () => {
+    try {
+      await previous.catch(() => {})
+      return await task()
+    } finally {
+      release!()
+    }
+  })()
+}
+
 function getBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location?.origin) {
     return `${window.location.origin}/toolchains/`
@@ -135,7 +177,15 @@ export async function precompileWasmOjProject(
     }))
 
     const cacheKey = computeProjectCacheKey(language, cleanEntry, projectFiles)
+    latestPrecompileKey = cacheKey
+
+    // Fast return if already cached or an identical build is in flight
     if (buildArtifactCache.has(cacheKey) || inFlightBuildPromises.has(cacheKey)) {
+      return
+    }
+
+    // If compiler is already actively building another project, avoid queuing a stale background precompile
+    if (activeCompilerBuildCount > 0) {
       return
     }
 
@@ -176,33 +226,47 @@ export async function precompileWasmOjProject(
       },
     }
 
-    const buildPromise = (async () => {
-      const compileStart = performance.now()
-      const result = await compiler.build(wasmProject, cacheKey)
-      const compilationTimeMs = performance.now() - compileStart
-      const diagnostics: Diagnostic[] = (result.diagnostics || []).map((d) => ({
-        severity: d.severity,
-        message: d.message,
-        file: d.file,
-        line: d.line,
-        column: d.column,
-        source: d.source,
-      }))
-
-      if (result.success && result.artifact) {
-        if (buildArtifactCache.size >= 25) {
-          const oldestKey = buildArtifactCache.keys().next().value
-          if (oldestKey) buildArtifactCache.delete(oldestKey)
-        }
-        buildArtifactCache.set(cacheKey, {
-          artifact: result.artifact,
-          diagnostics,
-          compilationTimeMs,
-          timestamp: Date.now(),
-        })
+    const buildPromise = runWithCompilerLock(async () => {
+      // Discard if user made newer edits or if already completed while waiting in queue
+      if (latestPrecompileKey !== cacheKey) {
+        return { buildResult: { success: false }, compilationTimeMs: 0, diagnostics: [] }
       }
-      return { buildResult: result, compilationTimeMs, diagnostics }
-    })()
+      if (buildArtifactCache.has(cacheKey)) {
+        const c = buildArtifactCache.get(cacheKey)!
+        return { buildResult: { success: true, artifact: c.artifact }, compilationTimeMs: c.compilationTimeMs, diagnostics: c.diagnostics }
+      }
+
+      activeCompilerBuildCount++
+      try {
+        const compileStart = performance.now()
+        const result = await compiler.build(wasmProject, cacheKey)
+        const compilationTimeMs = performance.now() - compileStart
+        const diagnostics: Diagnostic[] = (result.diagnostics || []).map((d) => ({
+          severity: d.severity,
+          message: d.message,
+          file: d.file,
+          line: d.line,
+          column: d.column,
+          source: d.source,
+        }))
+
+        if (result.success && result.artifact) {
+          if (buildArtifactCache.size >= 25) {
+            const oldestKey = buildArtifactCache.keys().next().value
+            if (oldestKey) buildArtifactCache.delete(oldestKey)
+          }
+          buildArtifactCache.set(cacheKey, {
+            artifact: result.artifact,
+            diagnostics,
+            compilationTimeMs,
+            timestamp: Date.now(),
+          })
+        }
+        return { buildResult: result, compilationTimeMs, diagnostics }
+      } finally {
+        activeCompilerBuildCount = Math.max(0, activeCompilerBuildCount - 1)
+      }
+    })
 
     inFlightBuildPromises.set(cacheKey, buildPromise)
     try {
@@ -313,14 +377,25 @@ export async function executeWasmOjProject(
 
     if (!inFlight) {
       onProgress?.('compiling', 0.4, `Compiling ${cleanEntry} client-side via WebAssembly compiler...`)
-      const compileStart = performance.now()
 
-      const unsubscribeProgress = compiler.onProgress((prog) => {
-        const fraction = prog.progress || 0.5
-        onProgress?.('compiling', 0.4 + fraction * 0.4, prog.label || 'Compiling...')
-      })
+      inFlight = runWithCompilerLock(async () => {
+        // Re-check cache once inside the lock in case precompile finished just now!
+        const cachedInside = buildArtifactCache.get(cacheKey)
+        if (cachedInside) {
+          return {
+            buildResult: { success: true, artifact: cachedInside.artifact },
+            compilationTimeMs: cachedInside.compilationTimeMs,
+            diagnostics: cachedInside.diagnostics,
+          }
+        }
 
-      inFlight = (async () => {
+        activeCompilerBuildCount++
+        const compileStart = performance.now()
+        const unsubscribeProgress = compiler.onProgress((prog) => {
+          const fraction = prog.progress || 0.5
+          onProgress?.('compiling', 0.4 + fraction * 0.4, prog.label || 'Compiling...')
+        })
+
         try {
           const res = await compiler.build(wasmProject, cacheKey)
           const timeMs = performance.now() - compileStart
@@ -348,17 +423,21 @@ export async function executeWasmOjProject(
           return { buildResult: res, compilationTimeMs: timeMs, diagnostics: diags }
         } finally {
           unsubscribeProgress()
-          inFlightBuildPromises.delete(cacheKey)
+          activeCompilerBuildCount = Math.max(0, activeCompilerBuildCount - 1)
         }
-      })()
+      })
 
       inFlightBuildPromises.set(cacheKey, inFlight)
     }
 
-    const buildOutcome = await inFlight
-    buildResult = buildOutcome.buildResult
-    compilationTimeMs = buildOutcome.compilationTimeMs
-    diagnostics = buildOutcome.diagnostics
+    try {
+      const buildOutcome = await inFlight
+      buildResult = buildOutcome.buildResult
+      compilationTimeMs = buildOutcome.compilationTimeMs
+      diagnostics = buildOutcome.diagnostics
+    } finally {
+      inFlightBuildPromises.delete(cacheKey)
+    }
   }
 
   if (!buildResult.success || !buildResult.artifact) {
@@ -427,12 +506,14 @@ export async function executeWasmOjProject(
         termination: javaRes.termination,
       }
     } else {
-      runResult = await runner.run(buildResult.artifact as Parameters<typeof runner.run>[0], {
-        args: [],
-        stdin: formattedStdin,
-        env: wasmProject.config.env,
-        determinism: wasmProject.config.determinism,
-        resources: wasmProject.config.resources,
+      runResult = await runWithRunnerLock(async () => {
+        return runner.run(buildResult.artifact as Parameters<typeof runner.run>[0], {
+          args: [],
+          stdin: formattedStdin,
+          env: wasmProject.config.env,
+          determinism: wasmProject.config.determinism,
+          resources: wasmProject.config.resources,
+        })
       })
     }
   } finally {

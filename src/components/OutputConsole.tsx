@@ -109,9 +109,14 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
   }
 
   // Execution Metrics
-  const durationSec = result ? (result.metrics.durationMs / 1000).toFixed(2) + 's' : '0.08s'
+  const execDurationMs = result
+    ? (result.metrics.executionTimeMs ?? result.metrics.durationMs)
+    : 80
+  const durationSec = execDurationMs < 1000
+    ? `${Math.max(1, Math.round(execDurationMs))}ms`
+    : `${(execDurationMs / 1000).toFixed(2)}s`
   const compileMs = result
-    ? (result.metrics.compilationTimeMs ? result.metrics.compilationTimeMs.toFixed(0) + 'ms' : Math.round(result.metrics.durationMs * 0.4) + 'ms')
+    ? (result.metrics.compilationTimeMs ? result.metrics.compilationTimeMs.toFixed(0) + 'ms' : Math.round(execDurationMs * 0.4) + 'ms')
     : '45ms'
   const memoryMb = result && result.metrics.memoryBytes
     ? (result.metrics.memoryBytes / (1024 * 1024)).toFixed(1)

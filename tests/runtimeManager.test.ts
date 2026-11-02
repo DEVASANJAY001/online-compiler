@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { runtimeManager } from '../src/runtimes/RuntimeManager'
 import { STARTER_PROJECTS, MULTI_FILE_EXAMPLES } from '../src/examples/starterTemplates'
+import { runWithCompilerLock, runWithRunnerLock } from '../src/runtimes/wasmOjShared'
 import type { Language } from '../src/types'
 
 describe('RuntimeManager & Language Templates', () => {
@@ -41,5 +42,36 @@ describe('RuntimeManager & Language Templates', () => {
       const entry = example.files.find((f) => f.path === example.defaultEntry)
       expect(entry).toBeDefined()
     }
+  })
+
+  it('strictly serializes concurrent compiler and runner operations to prevent BrowserCompiler conflict', async () => {
+    const executed: number[] = []
+    let activeOperations = 0
+    let maxConcurrent = 0
+
+    const makeTask = (id: number, delayMs: number) => async () => {
+      activeOperations++
+      if (activeOperations > maxConcurrent) {
+        maxConcurrent = activeOperations
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+      executed.push(id)
+      activeOperations--
+      return id
+    }
+
+    // Launch 3 concurrent calls
+    const p1 = runWithCompilerLock(makeTask(1, 20))
+    const p2 = runWithCompilerLock(makeTask(2, 10))
+    const p3 = runWithCompilerLock(makeTask(3, 5))
+
+    const results = await Promise.all([p1, p2, p3])
+    expect(results).toEqual([1, 2, 3])
+    expect(executed).toEqual([1, 2, 3])
+    expect(maxConcurrent).toBe(1) // Never more than 1 operation active at a time!
+
+    // Also test runner serialization
+    const runnerRes = await runWithRunnerLock(async () => 'ok')
+    expect(runnerRes).toBe('ok')
   })
 })

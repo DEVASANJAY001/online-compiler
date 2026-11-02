@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { analyzeExecutionOutput } from '../src/utils/inputDetection'
 import { computeProjectCacheKey } from '../src/runtimes/wasmOjShared'
+import { cleanPythonTraceback } from '../src/utils/pythonTraceback'
 
 describe('Python Execution & Interactive Input Handling', () => {
   it('detects Python EOFError when input() is called and requests interactive terminal input', () => {
@@ -51,6 +52,25 @@ describe('Python Execution & Interactive Input Handling', () => {
       { path: 'helper.py', content: 'def add(a, b): return a + b' },
     ])
     expect(keyChanged).not.toBe(key1)
+  })
+
+  it('strips internal Pyodide eval_code and _base.py frames from raw Python errors', () => {
+    const rawError = `Traceback (most recent call last):
+  File "/lib/python312.zip/_pyodide/_base.py", line 523, in eval_code
+    .run(globals, locals)
+  File "<exec>", line 3, in <module>
+    exec(_bytecode_cache["art-1"], globals())
+  File "main.py", line 4, in <module>
+    print(1 / 0)
+ZeroDivisionError: division by zero`
+
+    const cleaned = cleanPythonTraceback(rawError)
+    expect(cleaned).not.toContain('_pyodide')
+    expect(cleaned).not.toContain('_base.py')
+    expect(cleaned).not.toContain('<exec>')
+    expect(cleaned).not.toContain('.run(globals, locals)')
+    expect(cleaned).toContain('File "main.py", line 4, in <module>')
+    expect(cleaned).toContain('ZeroDivisionError: division by zero')
   })
 })
 

@@ -1,3 +1,4 @@
+import '../monacoWorker'
 import React, { useRef, useEffect, useState } from 'react'
 import Editor, { loader, type OnMount } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'

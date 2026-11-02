@@ -83,14 +83,14 @@ export class PythonRuntime implements ILanguageRuntime {
     const { runId, entryPoint, stdin, timeoutMs = 20000, onStream, onProgress } = options
     this.activeRunId = runId
 
-    const startTime = performance.now()
-
     if (!this.ready) {
       onProgress?.('initializing', 0.2, 'Loading Pyodide CPython WebAssembly runtime...')
       await this.initialize((p, msg) => {
         onProgress?.('initializing', p, msg)
       })
     }
+
+    const startTime = performance.now()
 
     onProgress?.('running', 0.9, 'Running Python script in sandboxed worker...')
 
@@ -135,9 +135,15 @@ export class PythonRuntime implements ILanguageRuntime {
 
           const diagnostics: Diagnostic[] = []
           if (data.error) {
-            // Parse Python traceback: File "<exec>", line 4, in <module>
-            const lineMatch = /line (\d+)/i.exec(data.error)
-            const line = lineMatch ? parseInt(lineMatch[1], 10) : undefined
+            // Parse Python traceback targeting the entry file first, avoiding internal runtime line numbers
+            const escaped = entryFile.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const userMatch = new RegExp(`File ["']${escaped}["'], line (\\d+)`, 'i').exec(data.error)
+            const fallbackMatch = /line (\d+)/i.exec(data.error)
+            const line = userMatch
+              ? parseInt(userMatch[1], 10)
+              : fallbackMatch
+                ? parseInt(fallbackMatch[1], 10)
+                : undefined
 
             diagnostics.push({
               severity: 'error',

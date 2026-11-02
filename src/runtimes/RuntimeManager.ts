@@ -77,12 +77,12 @@ export class RuntimeManager {
       : (fn: () => void) => setTimeout(fn, 1500)
 
     schedule(() => {
-      // Warm up WasmOj engines and Python worker in idle slices
-      const langs: Language[] = ['c', 'cpp', 'java', 'python']
+      // Warm up runtimes in background idle, prioritizing fast client-side runtimes
+      const langs: Language[] = ['python', 'c', 'java', 'cpp']
       langs.forEach((lang, idx) => {
         setTimeout(() => {
           this.prewarm(lang)
-        }, idx * 1000)
+        }, idx * 500)
       })
     })
   }
