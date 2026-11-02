@@ -3,22 +3,7 @@ import { runTeaVmWebAssembly } from '../src/runtimes/java/JavaWasiRunner'
 
 describe('JavaWasiRunner (TeaVM WebAssembly in-browser executor)', () => {
   it('instantiates and runs a WASI module with teavmMath imports and captures stdout', async () => {
-    // Construct a minimal WebAssembly binary that imports teavmMath.sqrt and wasi_snapshot_preview1.fd_write
-    // To ensure portability in tests without needing compiler toolchain, we test the runner with a synthetic wasm module
-    const wat = `
-      (module
-        (import "teavmMath" "sqrt" (func $sqrt (param f64) (result f64)))
-        (import "wasi_snapshot_preview1" "proc_exit" (func $exit (param i32)))
-        (memory (export "memory") 1)
-        (func (export "_start")
-          (local $val f64)
-          (call $sqrt (f64.const 25.0))
-          (set_local $val)
-          (call $exit (i32.const 0))
-        )
-      )
-    `
-    // We can test the runner functions directly
+    // We test that the runner function is properly exposed
     expect(typeof runTeaVmWebAssembly).toBe('function')
   })
 
@@ -39,3 +24,4 @@ describe('JavaWasiRunner (TeaVM WebAssembly in-browser executor)', () => {
     expect(teavmMath.unknownFunc()).toBe(0)
   })
 })
+

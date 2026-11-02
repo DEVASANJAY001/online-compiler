@@ -1,5 +1,6 @@
 import type { ILanguageRuntime, RuntimeRunOptions } from '../types'
 import type { Language, ProjectFile, ExecutionResult, RuntimeCapabilities, Diagnostic } from '../../types'
+import { computeProjectCacheKey } from '../wasmOjShared'
 
 export class PythonRuntime implements ILanguageRuntime {
   readonly language: Language = 'python'
@@ -44,10 +45,32 @@ export class PythonRuntime implements ILanguageRuntime {
     return this.ready
   }
 
+  async precompile(files: ProjectFile[], entryPoint?: string): Promise<void> {
+    const entryFile = files.find((f) => f.path === entryPoint) || files[0]
+    if (!entryFile) return
+
+    const cacheKey = computeProjectCacheKey('python', entryFile.path, files)
+    const worker = this.ensureWorker()
+
+    // Trigger initialization in background if not yet ready
+    if (!this.ready && !this.initPromise) {
+      this.initialize().catch(() => {})
+    }
+
+    worker.postMessage({
+      type: 'precompile',
+      cacheKey,
+      code: entryFile.content,
+      entryPoint: entryFile.path,
+      files: files.map((f) => ({ path: f.path, content: f.content })),
+    })
+  }
+
   private ensureWorker(): Worker {
     if (!this.worker) {
       this.worker = new Worker(
-        new URL('../../workers/python.worker.ts', import.meta.url)
+        new URL('../../workers/python.worker.ts', import.meta.url),
+        { type: 'module' }
       )
     }
     return this.worker
@@ -75,6 +98,8 @@ export class PythonRuntime implements ILanguageRuntime {
     if (!entryFile) {
       throw new Error(`Entry point file '${entryPoint}' not found.`)
     }
+
+    const cacheKey = computeProjectCacheKey('python', entryFile.path, files)
 
     return new Promise<ExecutionResult>((resolve, reject) => {
       this.activeReject = reject
@@ -129,6 +154,7 @@ export class PythonRuntime implements ILanguageRuntime {
             diagnostics,
             metrics: {
               durationMs: totalDuration,
+              compilationTimeMs: data.compilationTimeMs ?? 0,
               executionTimeMs: data.executionDurationMs || totalDuration,
               memoryBytes: data.memoryBytes ?? null,
             },
@@ -155,6 +181,7 @@ export class PythonRuntime implements ILanguageRuntime {
             ],
             metrics: {
               durationMs: performance.now() - startTime,
+              compilationTimeMs: 0,
               terminationReason: 'timeout',
             },
             termination: 'timeout',
@@ -166,7 +193,9 @@ export class PythonRuntime implements ILanguageRuntime {
       this.worker!.postMessage({
         type: 'run',
         runId,
+        cacheKey,
         code: entryFile.content,
+        entryPoint: entryFile.path,
         stdin: stdin || '',
         files: files.map((f) => ({ path: f.path, content: f.content })),
       })

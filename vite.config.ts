@@ -9,6 +9,9 @@ export default defineConfig({
     tailwindcss(),
   ],
   assetsInclude: ['**/*.bin', '**/*.wasm'],
+  worker: {
+    format: 'es',
+  },
   server: {
     host: true,
     fs: {
