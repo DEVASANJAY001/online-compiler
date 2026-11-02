@@ -136,6 +136,11 @@ export const Workspace: React.FC = () => {
     setCurrentProject(updatedProject)
     setDirtyFiles((prev) => new Set(prev).add(activeFile.path))
 
+    // Clear stale compiler diagnostics markers while editing
+    if (lastResult?.diagnostics?.length) {
+      setLastResult((prev) => (prev ? { ...prev, diagnostics: [] } : null))
+    }
+
     // Autosave debouncing
     if (settings.autoSave) {
       storageService.saveProject(updatedProject).then(() => {
@@ -275,16 +280,17 @@ export const Workspace: React.FC = () => {
           prevStdoutLengthRef.current = check.cleanedStdout.length
         }
       } else {
+        const effectiveStderr = check.cleanedStderr || (result.exitCode !== 0 ? result.stderr : '')
         if (!isContinuation) {
-          let fullOutput = result.stdout
-          if (result.stderr && result.exitCode !== 0) {
-            fullOutput += (fullOutput ? '\n' : '') + result.stderr
+          let fullOutput = check.cleanedStdout
+          if (effectiveStderr) {
+            fullOutput += (fullOutput ? '\n' : '') + effectiveStderr
           }
           setTerminalOutput(fullOutput)
         } else {
-          let newChunk = result.stdout.slice(prevStdoutLengthRef.current)
-          if (result.stderr && result.exitCode !== 0) {
-            newChunk += (newChunk ? '\n' : '') + result.stderr
+          let newChunk = check.cleanedStdout.slice(prevStdoutLengthRef.current)
+          if (effectiveStderr) {
+            newChunk += (newChunk ? '\n' : '') + effectiveStderr
           }
           setTerminalOutput((prev) => prev + newChunk)
         }
@@ -669,6 +675,7 @@ export const Workspace: React.FC = () => {
                     storageService.saveSettings({ ...settings, fontSize: size })
                   }}
                   layoutMode="friendly"
+                  diagnostics={lastResult?.diagnostics || []}
                 />
               </div>
             )}
@@ -722,6 +729,7 @@ export const Workspace: React.FC = () => {
                       storageService.saveSettings({ ...settings, fontSize: size })
                     }}
                     layoutMode="friendly"
+                    diagnostics={lastResult?.diagnostics || []}
                   />
                 </div>
 
@@ -789,6 +797,7 @@ export const Workspace: React.FC = () => {
                   storageService.saveSettings({ ...settings, fontSize: size })
                 }}
                 layoutMode="friendly"
+                diagnostics={lastResult?.diagnostics || []}
               />
             </div>
 
@@ -851,6 +860,7 @@ export const Workspace: React.FC = () => {
                 storageService.saveSettings({ ...settings, fontSize: size })
               }}
               layoutMode="pro"
+              diagnostics={lastResult?.diagnostics || []}
             />
 
             <OutputConsole

@@ -48,6 +48,36 @@ const SANDBOX_BY_LANG: Record<Language, string> = {
   javascript: 'Isolated Web Worker (V8 Sandbox)',
 }
 
+function renderFormattedTerminalOutput(output: string) {
+  if (!output) return null
+  const lines = output.split('\n')
+
+  return lines.map((line, idx) => {
+    const isErrorHeader =
+      /^(?:Traceback|.*?\b(?:Error|Exception|SyntaxError|TypeError|ValueError|IndexError|NameError|KeyError|AttributeError)\b|\[CodeSpace Error\])/i.test(line) ||
+      /:\d+:\d+:\s*error:/i.test(line)
+    const isWarning = /:\d+:\d+:\s*warning:/i.test(line) || /^\s*warning:/i.test(line)
+    const isCaretPointer = /^\s*[\^~]+\s*$/.test(line)
+    const isNotice = /^\[CodeSpace (?:Toolchain Download Timeout|Environment Restriction)\]/i.test(line)
+
+    let colorClass = ''
+    if (isErrorHeader) {
+      colorClass = 'text-rose-600 dark:text-rose-400 font-medium'
+    } else if (isWarning || isNotice) {
+      colorClass = 'text-amber-600 dark:text-amber-400 font-medium'
+    } else if (isCaretPointer) {
+      colorClass = 'text-rose-500 dark:text-rose-400 font-bold'
+    }
+
+    return (
+      <span key={idx} className={colorClass}>
+        {line}
+        {idx < lines.length - 1 ? '\n' : ''}
+      </span>
+    )
+  })
+}
+
 export const OutputConsole: React.FC<OutputConsoleProps> = ({
   executionState,
   result,
@@ -308,7 +338,7 @@ export const OutputConsole: React.FC<OutputConsoleProps> = ({
                   className="flex-1 overflow-auto whitespace-pre-wrap py-0.5 text-slate-900 dark:text-slate-100 font-mono cursor-text min-h-[60px]"
                 >
                   {terminalOutput ? (
-                    <span>{terminalOutput}</span>
+                    renderFormattedTerminalOutput(terminalOutput)
                   ) : (
                     <span className="text-slate-400 italic">
                       Press 'Run' above or Ctrl+Enter to compile and execute program.

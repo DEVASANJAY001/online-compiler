@@ -2,7 +2,7 @@ import '../monacoWorker'
 import React, { useRef, useEffect, useState } from 'react'
 import Editor, { loader, type OnMount } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
-import type { Language, Settings, ProjectFile } from '../types'
+import type { Language, Settings, ProjectFile, Diagnostic } from '../types'
 import { Copy, Maximize2, Minimize2, Check, Plus, X, Edit2 } from 'lucide-react'
 
 // Configure local monaco-editor bundle to avoid CDN latency and COEP cross-origin restrictions
@@ -25,6 +25,7 @@ interface CodeEditorProps {
   onCursorChange?: (pos: { line: number; column: number }) => void
   onFontSizeChange?: (newSize: number) => void
   layoutMode?: 'friendly' | 'pro'
+  diagnostics?: Diagnostic[]
 }
 
 function getMonacoLanguage(filePath: string, defaultLang: Language): string {
@@ -70,12 +71,38 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   onCursorChange,
   onFontSizeChange,
   layoutMode = 'friendly',
+  diagnostics = [],
 }) => {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+
+  // Update Monaco error/warning markers on current editor model
+  useEffect(() => {
+    if (!editorRef.current) return
+    const model = editorRef.current.getModel()
+    if (!model) return
+
+    const markers: monaco.editor.IMarkerData[] = (diagnostics || [])
+      .filter((d) => !d.file || d.file === activeFilePath || activeFilePath.endsWith(d.file))
+      .map((d) => ({
+        severity:
+          d.severity === 'warning'
+            ? monaco.MarkerSeverity.Warning
+            : d.severity === 'info'
+            ? monaco.MarkerSeverity.Info
+            : monaco.MarkerSeverity.Error,
+        message: d.message,
+        startLineNumber: Math.max(1, d.line || 1),
+        startColumn: Math.max(1, d.column || 1),
+        endLineNumber: Math.max(1, d.line || 1),
+        endColumn: 1000,
+      }))
+
+    monaco.editor.setModelMarkers(model, 'compiler-diagnostics', markers)
+  }, [diagnostics, activeFilePath])
 
   // Inline Tab Renaming State
   const [editingFilePath, setEditingFilePath] = useState<string | null>(null)
