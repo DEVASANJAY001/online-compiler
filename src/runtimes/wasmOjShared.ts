@@ -135,7 +135,12 @@ export function isWasmOjEngineReady(): boolean {
   return sharedCompiler !== null && sharedRunner !== null && !isEngineInitializing
 }
 
-export async function prefetchToolchains(language: Language): Promise<void> {
+const prefetchedToolchains = new Set<Language>()
+
+export async function prefetchToolchains(
+  language: Language,
+  onProgress?: (loadedBytes: number, totalBytes: number) => void
+): Promise<void> {
   try {
     const baseUrl = getBaseUrl()
     const clang = clangSource(baseUrl)
@@ -148,13 +153,18 @@ export async function prefetchToolchains(language: Language): Promise<void> {
         target: 'wasip1',
         optimization: 'debug',
         libcxxPrecompiledHeader: language === 'cpp',
+        onProgress: onProgress ? ({ loadedBytes, totalBytes }) => onProgress(loadedBytes, totalBytes) : undefined,
       })
+      prefetchedToolchains.add('c')
+      if (language === 'cpp') prefetchedToolchains.add('cpp')
     } else if (language === 'java') {
       await prefetchBrowserToolchain(toolchains, {
         language: 'java',
         target: 'wasip1',
         optimization: 'debug',
+        onProgress: onProgress ? ({ loadedBytes, totalBytes }) => onProgress(loadedBytes, totalBytes) : undefined,
       })
+      prefetchedToolchains.add('java')
     }
   } catch {
     // Ignore prefetch background errors
@@ -308,6 +318,22 @@ export async function executeWasmOjProject(
   const { compiler, runner } = await getSharedWasmOjEngine((p, msg) => {
     onProgress?.('initializing', p, msg)
   })
+
+  // Ensure compiler toolchains are prefetched and cached in persistent CacheStorage
+  // to prevent hitting the strict 60,000ms compiler request boundary on cold network downloads
+  if (!prefetchedToolchains.has(language) && (language === 'c' || language === 'cpp' || language === 'java')) {
+    onProgress?.('initializing', 0.2, `Preparing ${language.toUpperCase()} WebAssembly compiler toolchain...`)
+    await prefetchToolchains(language, (loaded, total) => {
+      const pct = total > 0 ? loaded / total : 0.5
+      const loadedMb = (loaded / (1024 * 1024)).toFixed(1)
+      const totalMb = (total / (1024 * 1024)).toFixed(1)
+      onProgress?.(
+        'initializing',
+        0.2 + pct * 0.2,
+        `Downloading ${language.toUpperCase()} toolchain (${loadedMb}MB / ${totalMb}MB)...`
+      )
+    })
+  }
 
   // Format entry file and secondary files
   const entryFile = files.find((f) => f.path === entryPoint) || files[0]

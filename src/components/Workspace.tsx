@@ -302,6 +302,13 @@ export const Workspace: React.FC = () => {
           msg += `Tip: Python and JavaScript run in all browsers without this requirement.`
         }
         setTerminalOutput((prev) => prev + `\n${msg}\n`)
+      } else if (errorMsg.includes('60000 ms') || errorMsg.includes('boundary')) {
+        let msg = `[CodeSpace Toolchain Download Timeout]\n`
+        msg += `The ${currentProject.language.toUpperCase()} WebAssembly compiler toolchain is large (~27 MB) and exceeded the 60-second browser download window on your connection.\n\n`
+        msg += `• The toolchain download is now continuing in the background and caching to your browser disk.\n`
+        msg += `• Click "Run" again in a few moments once the progress completes.\n`
+        msg += `• Tip: Python (Pyodide) and JavaScript execute immediately without downloading this Clang toolchain.`
+        setTerminalOutput((prev) => prev + `\n${msg}\n`)
       } else {
         setTerminalOutput((prev) => prev + `\n[CodeSpace Error] ${errorMsg}\n`)
       }
