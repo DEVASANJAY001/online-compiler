@@ -1,0 +1,56 @@
+{
+  "name": "CodeSpace — Serverless Online Compiler & IDE",
+  "short_name": "CodeSpace",
+  "description": "Fast, private client-side online compiler for Python, C, C++, Java, and JavaScript powered by WebAssembly.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#4f46e5",
+  "orientation": "any",
+  "categories": ["education", "developer", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Python 3.12 Compiler",
+      "short_name": "Python",
+      "description": "Run Python 3.12 in browser",
+      "url": "/python",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "C Compiler (Clang)",
+      "short_name": "C",
+      "description": "Compile C with Clang WebAssembly",
+      "url": "/c",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "C++ 20 Compiler",
+      "short_name": "C++",
+      "description": "Compile C++20 with Clang++",
+      "url": "/cpp",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Java Compiler (TeaVM)",
+      "short_name": "Java",
+      "description": "Run Java in browser sandbox",
+      "url": "/java",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "JavaScript Runner",
+      "short_name": "JavaScript",
+      "description": "Run JavaScript in V8 sandbox",
+      "url": "/javascript",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    }
+  ]
+}

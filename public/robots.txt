@@ -1,0 +1,28 @@
+# Robots.txt for CodeSpace Online Compiler
+# https://yourcodebase.vercel.app/
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /_next/
+Disallow: /assets/*.wasm
+
+# Search engine crawlers
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: Yandex
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+# Sitemap declaration
+Sitemap: https://yourcodebase.vercel.app/sitemap.xml
+Host: https://yourcodebase.vercel.app

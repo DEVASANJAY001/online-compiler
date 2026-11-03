@@ -15,7 +15,17 @@ import { runtimeManager } from '../runtimes/RuntimeManager'
 import { STARTER_PROJECTS, MULTI_FILE_EXAMPLES } from '../examples/starterTemplates'
 import { analyzeExecutionOutput } from '../utils/inputDetection'
 
-export const Workspace: React.FC = () => {
+interface WorkspaceProps {
+  initialLanguage?: Language
+  initialCode?: string
+  initialFilename?: string
+}
+
+export const Workspace: React.FC<WorkspaceProps> = ({
+  initialLanguage,
+  initialCode,
+  initialFilename,
+}) => {
   // Projects & File state
   const [projects, setProjects] = useState<Project[]>([])
   const [currentProject, setCurrentProject] = useState<Project | null>(null)
@@ -87,9 +97,31 @@ export const Workspace: React.FC = () => {
         setProjects(allProjects)
 
         const lastId = await storageService.getLastActiveProjectId()
-        const selected = allProjects.find((p) => p.id === lastId) || allProjects[0]
+        let selected = initialLanguage
+          ? allProjects.find((p) => p.language === initialLanguage)
+          : allProjects.find((p) => p.id === lastId) || allProjects[0]
+
+        if (!selected && initialLanguage) {
+          const template = STARTER_PROJECTS[initialLanguage]
+          selected = {
+            id: `proj_${initialLanguage}_${Date.now()}`,
+            name: template.name,
+            language: initialLanguage,
+            files: template.files.map((f) => ({ ...f })),
+            activeFile: template.activeFile,
+            updatedAt: Date.now(),
+          }
+        }
 
         if (selected) {
+          if (initialCode && selected.files[0]) {
+            selected.files[0].content = initialCode
+            if (initialFilename) {
+              selected.files[0].name = initialFilename
+              selected.files[0].path = initialFilename
+              selected.activeFile = initialFilename
+            }
+          }
           setCurrentProject(selected)
           setActiveFilePath(selected.activeFile || selected.files[0]?.path || '')
           runtimeManager.prewarm(selected.language)
@@ -102,6 +134,20 @@ export const Workspace: React.FC = () => {
     }
     initApp()
   }, [])
+
+  // Sync initialLanguage when changed after initial load
+  useEffect(() => {
+    if (initialLanguage && currentProject && currentProject.language !== initialLanguage) {
+      handleLanguageChange(initialLanguage)
+    }
+  }, [initialLanguage])
+
+  // Sync initialCode when changed
+  useEffect(() => {
+    if (initialCode && currentProject && activeFile) {
+      handleContentChange(initialCode)
+    }
+  }, [initialCode])
 
   // Theme Sync with HTML document root
   useEffect(() => {

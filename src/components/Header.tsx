@@ -21,9 +21,13 @@ import {
   Terminal as TerminalIcon,
   Columns2,
   Loader2,
+  Globe,
+  HelpCircle,
+  BookOpen,
 } from 'lucide-react'
 import type { Language, ExecutionState } from '../types'
 import { renderLanguageIcon } from './LanguageStrip'
+import { navigateTo } from '../router'
 
 interface HeaderProps {
   language: Language
@@ -87,6 +91,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [langDropdownOpen, setLangDropdownOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [exploreOpen, setExploreOpen] = useState(false)
   const [downloadOpen, setDownloadOpen] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
@@ -94,6 +99,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const langRef = useRef<HTMLDivElement>(null)
   const templatesRef = useRef<HTMLDivElement>(null)
+  const exploreRef = useRef<HTMLDivElement>(null)
   const downloadRef = useRef<HTMLDivElement>(null)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
 
@@ -109,6 +115,9 @@ export const Header: React.FC<HeaderProps> = ({
       }
       if (templatesRef.current && !templatesRef.current.contains(e.target as Node)) {
         setTemplatesOpen(false)
+      }
+      if (exploreRef.current && !exploreRef.current.contains(e.target as Node)) {
+        setExploreOpen(false)
       }
       if (downloadRef.current && !downloadRef.current.contains(e.target as Node)) {
         setDownloadOpen(false)
@@ -445,6 +454,16 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
               <button
                 onClick={() => {
+                  navigateTo('/features')
+                  setMobileMenuOpen(false)
+                }}
+                className="w-full px-3 py-2 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2.5 cursor-pointer"
+              >
+                <Globe className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Explore Guides &amp; Hubs</span>
+              </button>
+              <button
+                onClick={() => {
                   setShowShortcuts(true)
                   setMobileMenuOpen(false)
                 }}
@@ -530,6 +549,122 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <Layers className="w-3.5 h-3.5 text-purple-500" />
                   <span>Multi-file Project</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Explore Hubs & SEO Pages dropdown */}
+          <div className="relative" ref={exploreRef}>
+            <button
+              onClick={() => setExploreOpen(!exploreOpen)}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition border border-slate-200 dark:border-slate-700 shadow-xs cursor-pointer"
+              title="Explore Language Hubs, Guides & FAQs"
+            >
+              <Globe className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>Explore</span>
+              <ChevronDown className="w-3 h-3 text-slate-400" />
+            </button>
+
+            {exploreOpen && (
+              <div className="absolute right-0 mt-1.5 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  Online Compilers
+                </div>
+                <button
+                  onClick={() => {
+                    navigateTo('/python')
+                    setExploreOpen(false)
+                  }}
+                  className="w-full px-3 py-1.5 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+                >
+                  {renderLanguageIcon('python', 'w-3.5 h-3.5')}
+                  <span>Python 3.12 Hub</span>
+                </button>
+                <button
+                  onClick={() => {
+                    navigateTo('/c')
+                    setExploreOpen(false)
+                  }}
+                  className="w-full px-3 py-1.5 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+                >
+                  {renderLanguageIcon('c', 'w-3.5 h-3.5')}
+                  <span>C Compiler Hub</span>
+                </button>
+                <button
+                  onClick={() => {
+                    navigateTo('/cpp')
+                    setExploreOpen(false)
+                  }}
+                  className="w-full px-3 py-1.5 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+                >
+                  {renderLanguageIcon('cpp', 'w-3.5 h-3.5')}
+                  <span>C++ 20 Hub</span>
+                </button>
+                <button
+                  onClick={() => {
+                    navigateTo('/java')
+                    setExploreOpen(false)
+                  }}
+                  className="w-full px-3 py-1.5 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+                >
+                  {renderLanguageIcon('java', 'w-3.5 h-3.5')}
+                  <span>Java Compiler Hub</span>
+                </button>
+                <button
+                  onClick={() => {
+                    navigateTo('/javascript')
+                    setExploreOpen(false)
+                  }}
+                  className="w-full px-3 py-1.5 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+                >
+                  {renderLanguageIcon('javascript', 'w-3.5 h-3.5')}
+                  <span>JavaScript Runner Hub</span>
+                </button>
+
+                <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+                <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  Guides &amp; Resources
+                </div>
+                <button
+                  onClick={() => {
+                    navigateTo('/features')
+                    setExploreOpen(false)
+                  }}
+                  className="w-full px-3 py-1.5 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                  <span>Architecture &amp; Features</span>
+                </button>
+                <button
+                  onClick={() => {
+                    navigateTo('/templates')
+                    setExploreOpen(false)
+                  }}
+                  className="w-full px-3 py-1.5 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+                >
+                  <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Algorithm Templates</span>
+                </button>
+                <button
+                  onClick={() => {
+                    navigateTo('/faq')
+                    setExploreOpen(false)
+                  }}
+                  className="w-full px-3 py-1.5 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-amber-500" />
+                  <span>FAQ &amp; Knowledge Base</span>
+                </button>
+                <button
+                  onClick={() => {
+                    navigateTo('/docs')
+                    setExploreOpen(false)
+                  }}
+                  className="w-full px-3 py-1.5 text-left text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 cursor-pointer"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Docs &amp; Hotkeys</span>
                 </button>
               </div>
             )}

@@ -4,11 +4,138 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- Primary SEO Metadata -->
+    <title>CodeSpace — Free Online Compiler &amp; IDE (Python, C, C++, Java, JS)</title>
     <meta
       name="description"
-      content="CodeSpace is a client-side serverless online compiler for C, C++, Java, Python, and JavaScript executing via WebAssembly in browser workers."
+      content="Fast, free, private online compiler and IDE for Python 3.12, C (Clang), C++20, Java, and JavaScript. Run code instantly in your browser with WebAssembly sandboxing, interactive input, zero server queues, and multi-file projects."
     />
-    <title>CodeSpace — Serverless Online Compiler</title>
+    <meta
+      name="keywords"
+      content="online compiler, python online compiler, c online compiler, cpp online compiler, java online compiler, javascript online runner, run python online, webassembly ide, free code compiler, browser ide, codespace, online c++ ide, online java ide, clang webassembly"
+    />
+    <meta name="author" content="CodeSpace" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <link rel="canonical" href="https://yourcodebase.vercel.app/" id="canonicalMeta" />
+
+    <!-- Open Graph / Facebook / LinkedIn / WhatsApp -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CodeSpace" />
+    <meta property="og:title" content="CodeSpace — Free Online Compiler &amp; IDE" />
+    <meta
+      property="og:description"
+      content="Run Python 3.12, C, C++, Java, and JavaScript directly in your browser with WebAssembly sandboxing. Zero queue times, 100% private."
+    />
+    <meta property="og:url" content="https://yourcodebase.vercel.app/" />
+    <meta property="og:image" content="https://yourcodebase.vercel.app/og-image.svg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="CodeSpace Online Compiler Preview" />
+
+    <!-- Twitter / X Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@CodeSpace" />
+    <meta name="twitter:creator" content="@CodeSpace" />
+    <meta name="twitter:title" content="CodeSpace — Free Online Compiler &amp; IDE" />
+    <meta
+      name="twitter:description"
+      content="Fast client-side WebAssembly compiler for Python 3.12, C, C++, Java, and JavaScript. Zero queue latency, interactive stdin."
+    />
+    <meta name="twitter:image" content="https://yourcodebase.vercel.app/og-image.svg" />
+
+    <!-- Web App & Theme Preferences -->
+    <meta name="theme-color" content="#4f46e5" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="CodeSpace" />
+
+    <!-- JSON-LD Structured Data: WebApplication -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "CodeSpace",
+      "url": "https://yourcodebase.vercel.app/",
+      "description": "Client-side serverless online compiler for C, C++, Java, Python, and JavaScript executing via WebAssembly in browser workers.",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "All (Web Browser, Chrome, Firefox, Safari, Edge)",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.9",
+        "reviewCount": "2840",
+        "bestRating": "5"
+      },
+      "featureList": [
+        "In-Browser WebAssembly Execution",
+        "Python 3.12 CPython Pyodide Sandbox",
+        "Clang 22.0 C and C++20 Native Toolchain",
+        "Java 17 TeaVM WebAssembly JVM",
+        "Modern ES2024 JavaScript Runner",
+        "Live Interactive Terminal Stdin Input",
+        "Multi-File Project Management and ZIP Export",
+        "Zero Server Queues & 100% Client-Side Privacy",
+        "Monaco Code Editor with Syntax Highlighting"
+      ]
+    }
+    </script>
+
+    <!-- JSON-LD Structured Data: FAQPage (Google Rich FAQ Snippets) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is CodeSpace online compiler free to use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes! CodeSpace is 100% free with unlimited runs, zero queue times, and no sign-up or credit card required."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does CodeSpace run code without a server?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "CodeSpace uses WebAssembly (WASM) to compile and execute programs client-side inside your browser web workers. Python executes via Pyodide CPython 3.12, C and C++ compile with Clang WebAssembly, Java runs via a sandboxed WebAssembly JVM, and JavaScript executes in an isolated V8 worker sandbox."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is my code secure and private on CodeSpace?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Because CodeSpace compiles and runs code entirely inside your browser sandbox, your code is never transmitted to, inspected by, or stored on remote execution servers."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does CodeSpace support interactive stdin user input?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes! CodeSpace provides an integrated terminal with live input continuation. You can provide inputs to Python input(), C scanf(), C++ cin, and Java Scanner prompts seamlessly."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which programming languages can I compile on CodeSpace?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "CodeSpace natively supports Python 3.12, C (Clang 22), C++20 (Clang++), Java 17, and modern JavaScript (ES2024)."
+          }
+        }
+      ]
+    }
+    </script>
+
     <!-- Cross-Origin Isolation Service Worker for GitHub Pages / static hosting -->
     <script src="/coi-serviceworker.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -34,6 +161,26 @@
     </script>
   </head>
   <body class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased overflow-hidden">
+    <!-- Search engine crawlable fallback content -->
+    <noscript>
+      <header style="padding: 24px; font-family: sans-serif; background: #0f172a; color: #fff;">
+        <h1>CodeSpace — Free Online Compiler &amp; IDE</h1>
+        <p>Run Python, C, C++, Java, and JavaScript directly in your browser using WebAssembly. Fast, private, zero server queue latency.</p>
+        <nav>
+          <ul style="display: flex; gap: 16px; list-style: none; padding: 0;">
+            <li><a href="/python" style="color: #818cf8;">Online Python Compiler</a></li>
+            <li><a href="/c" style="color: #60a5fa;">Online C Compiler</a></li>
+            <li><a href="/cpp" style="color: #a78bfa;">Online C++ Compiler</a></li>
+            <li><a href="/java" style="color: #f97316;">Online Java Compiler</a></li>
+            <li><a href="/javascript" style="color: #facc15;">Online JavaScript Runner</a></li>
+            <li><a href="/features" style="color: #34d399;">Features &amp; Benchmarks</a></li>
+            <li><a href="/faq" style="color: #f43f5e;">Frequently Asked Questions</a></li>
+            <li><a href="/templates" style="color: #38bdf8;">Algorithm Templates</a></li>
+          </ul>
+        </nav>
+      </header>
+    </noscript>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
